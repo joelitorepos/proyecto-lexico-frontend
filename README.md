@@ -1,108 +1,44 @@
-# Proyecto Final - Análisis Léxico (Frontend)
+# proyecto-lexico-frontend
 
-Curso: Lenguajes Formales y Autómatas
+This template should help get you started developing with Vue 3 in Vite.
 
-Frontend del sistema de análisis léxico. Permite al usuario registrarse, iniciar
-sesión y cargar un documento de texto para su análisis.
+## Recommended IDE Setup
 
-## Tecnologías
+[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
 
-- [Vite](https://vite.dev/)
-- [Vue 3](https://vuejs.org/)
-- [Tailwind CSS](https://tailwindcss.com/)
-- [Vue Router](https://router.vuejs.org/)
+## Recommended Browser Setup
 
-## Requisitos previos
+- Chromium-based browsers (Chrome, Edge, Brave, etc.):
+  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
+  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
+- Firefox:
+  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
+  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
 
-Antes de clonar el proyecto asegúrate de tener instalado:
+## Customize configuration
 
-- **Node.js** versión 18 o superior ([descargar aquí](https://nodejs.org/))
-- **Git** ([descargar aquí](https://git-scm.com/downloads))
+See [Vite Configuration Reference](https://vite.dev/config/).
 
-Para verificar que ya los tienes instalados, corre en tu terminal:
+## Project Setup
 
-```bash
-node -v
-git -v
-```
-
-## Instalación
-
-1. Clona el repositorio:
-
-```bash
-git clone https://github.com/USUARIO/proyecto-lexico-frontend.git
-cd proyecto-lexico-frontend
-```
-
-2. Instala las dependencias:
-
-```bash
+```sh
 npm install
 ```
 
-3. Corre el proyecto en modo desarrollo:
+### Compile and Hot-Reload for Development
 
-```bash
+```sh
 npm run dev
 ```
 
-4. Abre tu navegador en la URL que te muestre la terminal (normalmente
-   `http://localhost:5173`).
+### Compile and Minify for Production
 
-## Estructura del proyecto
-
-```
-/src
-  /pages        → Vistas/páginas de la app (Login, Registro, Dashboard, etc.)
-  /components   → Componentes reutilizables
-  /composables  → Lógica compartida (auth, llamadas a la API)
-  /router       → Configuración de rutas (Vue Router)
-  App.vue       → Componente raíz
-  main.js       → Punto de entrada de la aplicación
+```sh
+npm run build
 ```
 
-## Cómo agregar una nueva página
+### Lint with [ESLint](https://eslint.org/)
 
-1. Crea tu componente `.vue` dentro de `/src/pages`.
-2. Ábrelo en `src/router/index.js` e impórtalo.
-3. Agrega su ruta al arreglo `routes`, por ejemplo:
-
-```js
-import Login from '../pages/Login.vue'
-
-const routes = [
-  { path: '/', name: 'home', component: Home },
-  { path: '/login', name: 'login', component: Login },
-]
+```sh
+npm run lint
 ```
-
-## Flujo de trabajo con Git
-
-- `main` → rama estable, no se hacen commits directos aquí.
-- `develop` → rama de integración.
-- Cada tarea se trabaja en una rama `feature/nombre-de-la-tarea` a partir de
-  `develop`, y se sube mediante Pull Request.
-
-```bash
-git checkout develop
-git pull
-git checkout -b feature/nombre-de-la-tarea
-# ... trabajas y haces commits ...
-git push -u origin feature/nombre-de-la-tarea
-```
-
-Luego abres el Pull Request en GitHub hacia `develop`.
-
-## Scripts disponibles
-
-| Comando           | Descripción                                  |
-|-------------------|-----------------------------------------------|
-| `npm run dev`     | Levanta el servidor de desarrollo             |
-| `npm run build`   | Genera el build de producción en `/dist`      |
-| `npm run preview` | Sirve localmente el build de producción       |
-
-## Despliegue
-
-El proyecto se despliega automáticamente en **Cloudflare Pages** al hacer push
-a la rama `main`.
