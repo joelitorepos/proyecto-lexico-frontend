@@ -1,17 +1,26 @@
-
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import CamaraFacial from '../components/CamaraFacial.vue'
+import { authApi } from '@/services/api'
 
-// Métodos de autenticación
+const router = useRouter()
+
+// Método de autenticación
 const metodo = ref('contrasena')
-const usuario = ref('')
+
+// Credenciales
+const correo = ref('')
 const contrasena = ref('')
 const mostrarContrasena = ref(false)
 
-// Fotografía y QR
+// Fotografía facial (método alternativo, aún sin backend)
 const fotoFacial = ref('')
+
+// QR: subida de imagen (para método visual) y código manual (para backend)
 const archivoQR = ref(null)
+const codigoQr = ref('')
+const resultadoQr = ref(null)
 
 // Estados
 const mensaje = ref('')
@@ -19,16 +28,16 @@ const tipoMensaje = ref('info')
 const procesando = ref(false)
 
 const metodos = [
-  { title: 'Usuario y contraseña', value: 'contrasena' },
-  { title: 'Usuario y fotografía', value: 'facial' },
+  { title: 'Correo y contraseña', value: 'contrasena' },
+  { title: 'Correo y fotografía', value: 'facial' },
   { title: 'Código QR', value: 'qr' },
 ]
 
-const reglasUsuario = [
-  (v) => !!v?.trim() || 'El nombre de usuario es obligatorio.',
+const reglasCorreo = [
+  (v) => !!v?.trim() || 'El correo es obligatorio.',
   (v) =>
-    /^[a-zA-Z0-9_]{4,20}$/.test(v || '') ||
-    'El usuario debe tener entre 4 y 20 caracteres sin espacios.',
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '') ||
+    'Ingresa un correo electrónico válido.',
 ]
 
 const reglasContrasena = [
@@ -38,28 +47,26 @@ const reglasContrasena = [
 const puedeIngresar = computed(() => {
   if (metodo.value === 'contrasena') {
     return (
-      /^[a-zA-Z0-9_]{4,20}$/.test(usuario.value) &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.value) &&
       contrasena.value.length > 0
     )
   }
-
   if (metodo.value === 'facial') {
     return (
-      /^[a-zA-Z0-9_]{4,20}$/.test(usuario.value) &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.value) &&
       !!fotoFacial.value
     )
   }
-
   if (metodo.value === 'qr') {
-    return archivoQR.value !== null
+    return codigoQr.value.trim().length > 0
   }
-
   return false
 })
 
 function cambiarMetodo(valor) {
   metodo.value = valor
   mensaje.value = ''
+  resultadoQr.value = null
 }
 
 function recibirFoto(imagen) {
@@ -92,7 +99,7 @@ function seleccionarQR(event) {
   archivoQR.value = archivo
 }
 
-function iniciarSesion() {
+async function iniciarSesion() {
   if (!puedeIngresar.value) {
     tipoMensaje.value = 'error'
     mensaje.value = 'Completa los datos requeridos.'
@@ -100,16 +107,48 @@ function iniciarSesion() {
   }
 
   procesando.value = true
+  mensaje.value = ''
+  resultadoQr.value = null
 
-  // Por ahora solo validamos los datos.
-  // No existe una autenticación real todavía.
-  tipoMensaje.value = 'info'
-  mensaje.value =
-    'Datos validados correctamente. ' +
-    'La autenticación estará disponible ' +
-    'cuando conectemos el backend.'
+  try {
+    if (metodo.value === 'contrasena') {
+      const data = await authApi.login({
+        email: correo.value.trim().toLowerCase(),
+        password: contrasena.value,
+      })
 
-  procesando.value = false
+      // Sesión local (sin JWT por ahora)
+      localStorage.setItem('lexiscan_user', JSON.stringify(data))
+
+      tipoMensaje.value = 'success'
+      mensaje.value = `Bienvenido, ${data.nickname}.`
+
+      // Redirige al análisis (ajusta el 'name' si tu router lo llama distinto)
+      router.push({ name: 'analisis' }).catch(() => router.push('/'))
+    } else if (metodo.value === 'facial') {
+      // El backend aún no expone login facial. Se mantiene el mensaje informativo.
+      tipoMensaje.value = 'info'
+      mensaje.value =
+        'El inicio de sesión con fotografía estará disponible próximamente.'
+    } else if (metodo.value === 'qr') {
+      // El backend recibe el CÓDIGO del QR, no la imagen.
+      const data = await authApi.verificarQr(codigoQr.value.trim())
+      resultadoQr.value = data
+
+      if (data.valido) {
+        tipoMensaje.value = 'success'
+        mensaje.value = `Credencial válida: ${data.nickname}.`
+      } else {
+        tipoMensaje.value = 'error'
+        mensaje.value = data.mensaje || 'Credencial no válida o revocada.'
+      }
+    }
+  } catch (error) {
+    tipoMensaje.value = 'error'
+    mensaje.value = error.message || 'No se pudo completar la operación.'
+  } finally {
+    procesando.value = false
+  }
 }
 </script>
 
@@ -148,14 +187,15 @@ function iniciarSesion() {
 
       <v-divider class="my-4" />
 
-      <!-- Usuario y contraseña -->
+      <!-- Correo y contraseña -->
       <div v-if="metodo === 'contrasena'">
         <v-text-field
-          v-model="usuario"
-          label="Nombre de usuario"
-          prepend-inner-icon="mdi-account"
+          v-model="correo"
+          label="Correo electrónico"
+          type="email"
+          prepend-inner-icon="mdi-email"
           variant="outlined"
-          :rules="reglasUsuario"
+          :rules="reglasCorreo"
           validate-on="blur"
         />
 
@@ -176,14 +216,15 @@ function iniciarSesion() {
         />
       </div>
 
-      <!-- Usuario y fotografía -->
+      <!-- Correo y fotografía -->
       <div v-if="metodo === 'facial'">
         <v-text-field
-          v-model="usuario"
-          label="Nombre de usuario"
-          prepend-inner-icon="mdi-account"
+          v-model="correo"
+          label="Correo electrónico"
+          type="email"
+          prepend-inner-icon="mdi-email"
           variant="outlined"
-          :rules="reglasUsuario"
+          :rules="reglasCorreo"
           validate-on="blur"
         />
 
@@ -220,25 +261,31 @@ function iniciarSesion() {
           />
 
           <p class="mt-3">
-            Selecciona una imagen que contenga
-            tu código QR.
+            Pega el código que contiene tu QR
+            para verificar tu credencial.
           </p>
         </div>
 
-        <input
-          type="file"
-          accept="image/png,image/jpeg"
-          @change="seleccionarQR"
+        <v-text-field
+          v-model="codigoQr"
+          label="Código del QR"
+          prepend-inner-icon="mdi-qrcode"
+          variant="outlined"
+          hint="El código es el texto que viene dentro del QR."
+          persistent-hint
         />
 
         <v-alert
-          v-if="archivoQR"
-          type="success"
+          v-if="resultadoQr"
+          :type="resultadoQr.valido ? 'success' : 'error'"
           variant="tonal"
           class="mt-4"
         >
-          Archivo seleccionado:
-          {{ archivoQR.name }}
+          {{
+            resultadoQr.valido
+              ? `Credencial válida: ${resultadoQr.nickname}`
+              : resultadoQr.mensaje
+          }}
         </v-alert>
       </div>
 

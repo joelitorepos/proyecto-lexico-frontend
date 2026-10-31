@@ -1,15 +1,21 @@
-
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import CamaraFacial from '../components/CamaraFacial.vue'
 import EditorFoto from '../components/EditorFoto.vue'
+import { authApi } from '@/services/api'
+
+const router = useRouter()
 
 // Datos del formulario
 const nombre = ref('')
 const usuario = ref('')
 const correo = ref('')
+const telefono = ref('')
+const fechaNacimiento = ref('')
 const contrasena = ref('')
 const confirmarContrasena = ref('')
+const metodoNotificacion = ref('EMAIL')
 
 // Fotografías
 const foto = ref(null)
@@ -22,68 +28,98 @@ const mensaje = ref('')
 const tipoMensaje = ref('info')
 const mostrarContrasena = ref(false)
 const mostrarConfirmacion = ref(false)
+const registrando = ref(false)
 
-// Límites de caracteres
+// Límites
 const MAX_NOMBRE = 80
-const MAX_USUARIO = 20
-const MAX_CORREO = 254
+const MAX_USUARIO = 30
+const MAX_CORREO = 150
 const MAX_CONTRASENA = 64
+const MAX_TELEFONO = 20
 
 // Reglas de validación
 const reglasNombre = [
-  v => !!v?.trim() || 'El nombre completo es obligatorio.',
-  v => (v?.trim().length || 0) >= 3 ||
+  (v) => !!v?.trim() || 'El nombre completo es obligatorio.',
+  (v) =>
+    (v?.trim().length || 0) >= 3 ||
     'El nombre debe tener al menos 3 caracteres.',
-  v => (v?.trim().length || 0) <= MAX_NOMBRE ||
-    'El nombre no debe superar 80 caracteres.'
+  (v) =>
+    (v?.trim().length || 0) <= MAX_NOMBRE ||
+    `El nombre no debe superar ${MAX_NOMBRE} caracteres.`,
 ]
 
 const reglasUsuario = [
-  v => !!v || 'El usuario es obligatorio.',
-  v => (v || '').length >= 4 ||
-    'El usuario debe tener al menos 4 caracteres.',
-  v => (v || '').length <= MAX_USUARIO ||
-    'El usuario no debe superar 20 caracteres.',
-  v => /^[a-zA-Z0-9_]+$/.test(v || '') ||
-    'Solo se permiten letras, números y guion bajo (_).'
+  (v) => !!v || 'El usuario es obligatorio.',
+  (v) =>
+    (v || '').length >= 3 ||
+    'El usuario debe tener al menos 3 caracteres.',
+  (v) =>
+    (v || '').length <= MAX_USUARIO ||
+    `El usuario no debe superar ${MAX_USUARIO} caracteres.`,
+  (v) =>
+    /^[a-zA-Z0-9_.-]+$/.test(v || '') ||
+    'Solo se permiten letras, números, punto, guion y guion bajo.',
 ]
 
 const reglasCorreo = [
-  v => !!v?.trim() || 'El correo es obligatorio.',
-  v => (v || '').length <= MAX_CORREO ||
-    'El correo no debe superar 254 caracteres.',
-  v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '') ||
-    'Ingresa un correo electrónico válido.'
+  (v) => !!v?.trim() || 'El correo es obligatorio.',
+  (v) =>
+    (v || '').length <= MAX_CORREO ||
+    `El correo no debe superar ${MAX_CORREO} caracteres.`,
+  (v) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '') ||
+    'Ingresa un correo electrónico válido.',
+]
+
+const reglasTelefono = [
+  (v) => !!v?.trim() || 'El teléfono es obligatorio.',
+  (v) =>
+    /^\+?\d{8,15}$/.test((v || '').replace(/[\s\-().]/g, '')) ||
+    'Entre 8 y 15 dígitos, con o sin código de país.',
+]
+
+const reglasFechaNacimiento = [
+  (v) => !!v || 'La fecha de nacimiento es obligatoria.',
+  (v) => {
+    const fecha = new Date(v)
+    const hoy = new Date()
+    return fecha < hoy || 'La fecha debe ser anterior a hoy.'
+  },
 ]
 
 const reglasContrasena = [
-  v => !!v || 'La contraseña es obligatoria.',
-  v => (v || '').length >= 8 ||
+  (v) => !!v || 'La contraseña es obligatoria.',
+  (v) =>
+    (v || '').length >= 8 ||
     'La contraseña debe tener al menos 8 caracteres.',
-  v => (v || '').length <= MAX_CONTRASENA ||
-    'La contraseña no debe superar 64 caracteres.',
-  v => /[A-Za-z]/.test(v || '') ||
+  (v) =>
+    (v || '').length <= MAX_CONTRASENA ||
+    `La contraseña no debe superar ${MAX_CONTRASENA} caracteres.`,
+  (v) =>
+    /[A-Za-z]/.test(v || '') ||
     'La contraseña debe incluir una letra.',
-  v => /\d/.test(v || '') ||
-    'La contraseña debe incluir un número.'
+  (v) =>
+    /\d/.test(v || '') ||
+    'La contraseña debe incluir un número.',
 ]
 
 const reglasConfirmacion = [
-  v => !!v || 'Debes confirmar tu contraseña.',
-  v => v === contrasena.value ||
-    'Las contraseñas no coinciden.'
+  (v) => !!v || 'Debes confirmar tu contraseña.',
+  (v) =>
+    v === contrasena.value ||
+    'Las contraseñas no coinciden.',
 ]
 
 // Validación general
 const formularioValido = computed(() => {
   return (
-    reglasNombre.every(regla => regla(nombre.value) === true) &&
-    reglasUsuario.every(regla => regla(usuario.value) === true) &&
-    reglasCorreo.every(regla => regla(correo.value) === true) &&
-    reglasContrasena.every(regla => regla(contrasena.value) === true) &&
-    reglasConfirmacion.every(
-      regla => regla(confirmarContrasena.value) === true
-    )
+    reglasNombre.every((r) => r(nombre.value) === true) &&
+    reglasUsuario.every((r) => r(usuario.value) === true) &&
+    reglasCorreo.every((r) => r(correo.value) === true) &&
+    reglasTelefono.every((r) => r(telefono.value) === true) &&
+    reglasFechaNacimiento.every((r) => r(fechaNacimiento.value) === true) &&
+    reglasContrasena.every((r) => r(contrasena.value) === true) &&
+    reglasConfirmacion.every((r) => r(confirmarContrasena.value) === true)
   )
 })
 
@@ -92,7 +128,7 @@ function limitarTexto(valor, maximo) {
   return String(valor ?? '').slice(0, maximo)
 }
 
-// Seleccionar fotografía
+// Seleccionar fotografía desde archivo
 function seleccionarFoto(event) {
   const archivo = event.target.files?.[0]
 
@@ -103,11 +139,7 @@ function seleccionarFoto(event) {
 
   if (!archivo) return
 
-  const tiposPermitidos = [
-    'image/jpeg',
-    'image/png',
-    'image/webp'
-  ]
+  const tiposPermitidos = ['image/jpeg', 'image/png', 'image/webp']
 
   if (!tiposPermitidos.includes(archivo.type)) {
     tipoMensaje.value = 'warning'
@@ -151,8 +183,8 @@ function recibirFotoEditada(imagen) {
   fotoEditada.value = imagen
 }
 
-// Validar antes de enviar
-function registrarUsuario() {
+// Enviar registro al backend
+async function registrarUsuario() {
   mensaje.value = ''
 
   if (!formularioValido.value) {
@@ -161,13 +193,54 @@ function registrarUsuario() {
     return
   }
 
-  tipoMensaje.value = 'info'
-  mensaje.value =
-    'Todos los campos cumplen las validaciones. ' +
-    'El registro real estará disponible cuando ' +
-    'conectemos el backend.'
+  // Prioridad para fotoOriginal: editada > capturada por cámara > subida
+  const fotoOriginal =
+    fotoEditada.value || fotoFacial.value || vistaFoto.value || null
 
-  // Esta versión no envía datos al servidor.
+  const payload = {
+    email: correo.value.trim().toLowerCase(),
+    telefono: telefono.value.trim(),
+    fechaNacimiento: fechaNacimiento.value, // 'YYYY-MM-DD'
+    nickname: usuario.value.trim(),
+    password: contrasena.value,
+    metodoNotificacion: metodoNotificacion.value || null,
+    fotoOriginal: fotoOriginal,
+    // Si el editor produce una versión aparte, aquí iría fotoModificada.
+    // Por ahora el editor devuelve una sola imagen; se envía como original.
+  }
+
+  registrando.value = true
+  tipoMensaje.value = 'info'
+  mensaje.value = 'Enviando registro…'
+
+  try {
+    const data = await authApi.registrar(payload)
+    const canales = data.notificacionesProgramadas?.join(', ') || 'ninguna'
+
+    tipoMensaje.value = 'success'
+    mensaje.value =
+      `¡Registro exitoso! Usuario: ${data.nickname} (id ${data.idUsuario}). ` +
+      `Notificaciones programadas: ${canales}.`
+
+    // Limpiar formulario tras éxito
+    nombre.value = ''
+    usuario.value = ''
+    correo.value = ''
+    telefono.value = ''
+    fechaNacimiento.value = ''
+    contrasena.value = ''
+    confirmarContrasena.value = ''
+    metodoNotificacion.value = 'EMAIL'
+    foto.value = null
+    vistaFoto.value = ''
+    fotoFacial.value = ''
+    fotoEditada.value = ''
+  } catch (error) {
+    tipoMensaje.value = 'error'
+    mensaje.value = error.message || 'No se pudo completar el registro.'
+  } finally {
+    registrando.value = false
+  }
 }
 </script>
 
@@ -213,7 +286,7 @@ function registrarUsuario() {
           required
         />
 
-        <!-- Usuario -->
+        <!-- Usuario (nickname) -->
         <v-text-field
           :model-value="usuario"
           @update:model-value="
@@ -226,7 +299,7 @@ function registrarUsuario() {
           :maxlength="MAX_USUARIO"
           :counter="MAX_USUARIO"
           validate-on="input"
-          hint="De 4 a 20 caracteres. Letras, números o guion bajo."
+          hint="De 3 a 30 caracteres. Letras, números, punto, guion o guion bajo."
           persistent-hint
           required
         />
@@ -246,6 +319,50 @@ function registrarUsuario() {
           :counter="MAX_CORREO"
           validate-on="input"
           required
+        />
+
+        <!-- Teléfono -->
+        <v-text-field
+          :model-value="telefono"
+          @update:model-value="
+            telefono = limitarTexto($event, MAX_TELEFONO)
+          "
+          label="Teléfono"
+          prepend-inner-icon="mdi-phone"
+          variant="outlined"
+          :rules="reglasTelefono"
+          :maxlength="MAX_TELEFONO"
+          :counter="MAX_TELEFONO"
+          validate-on="input"
+          hint="Ej: 50212345678 (con código de país, sin espacios)."
+          persistent-hint
+          required
+        />
+
+        <!-- Fecha de nacimiento -->
+        <v-text-field
+          v-model="fechaNacimiento"
+          label="Fecha de nacimiento"
+          type="date"
+          prepend-inner-icon="mdi-cake-variant"
+          variant="outlined"
+          :rules="reglasFechaNacimiento"
+          validate-on="input"
+          required
+        />
+
+        <!-- Método de notificación -->
+        <v-select
+          v-model="metodoNotificacion"
+          :items="[
+            { title: 'Correo electrónico', value: 'EMAIL' },
+            { title: 'WhatsApp', value: 'WHATSAPP' },
+            { title: 'Ambos', value: 'AMBOS' },
+            { title: 'No notificar', value: null },
+          ]"
+          label="Método de notificación"
+          prepend-inner-icon="mdi-bell-outline"
+          variant="outlined"
         />
 
         <!-- Contraseña -->
@@ -375,7 +492,8 @@ function registrarUsuario() {
           size="large"
           block
           class="mt-5"
-          :disabled="!formularioValido"
+          :loading="registrando"
+          :disabled="!formularioValido || registrando"
         >
           Registrarse
         </v-btn>
