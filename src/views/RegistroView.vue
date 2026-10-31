@@ -22,62 +22,75 @@ const mensaje = ref('')
 const tipoMensaje = ref('info')
 const mostrarContrasena = ref(false)
 const mostrarConfirmacion = ref(false)
-const formularioEnviado = ref(false)
+
+// Límites de caracteres
+const MAX_NOMBRE = 80
+const MAX_USUARIO = 20
+const MAX_CORREO = 254
+const MAX_CONTRASENA = 64
 
 // Reglas de validación
 const reglasNombre = [
-  (v) => !!v?.trim() || 'El nombre completo es obligatorio.',
-  (v) =>
-    v?.trim().length >= 3 ||
+  v => !!v?.trim() || 'El nombre completo es obligatorio.',
+  v => (v?.trim().length || 0) >= 3 ||
     'El nombre debe tener al menos 3 caracteres.',
+  v => (v?.trim().length || 0) <= MAX_NOMBRE ||
+    'El nombre no debe superar 80 caracteres.'
 ]
 
 const reglasUsuario = [
-  (v) => !!v?.trim() || 'El usuario es obligatorio.',
-  (v) =>
-    /^[a-zA-Z0-9_]{4,20}$/.test(v || '') ||
-    'Utiliza entre 4 y 20 caracteres: letras, números o guion bajo.',
+  v => !!v || 'El usuario es obligatorio.',
+  v => (v || '').length >= 4 ||
+    'El usuario debe tener al menos 4 caracteres.',
+  v => (v || '').length <= MAX_USUARIO ||
+    'El usuario no debe superar 20 caracteres.',
+  v => /^[a-zA-Z0-9_]+$/.test(v || '') ||
+    'Solo se permiten letras, números y guion bajo (_).'
 ]
 
 const reglasCorreo = [
-  (v) => !!v?.trim() || 'El correo es obligatorio.',
-  (v) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '') ||
-    'Ingresa un correo electrónico válido.',
+  v => !!v?.trim() || 'El correo es obligatorio.',
+  v => (v || '').length <= MAX_CORREO ||
+    'El correo no debe superar 254 caracteres.',
+  v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '') ||
+    'Ingresa un correo electrónico válido.'
 ]
 
 const reglasContrasena = [
-  (v) => !!v || 'La contraseña es obligatoria.',
-  (v) =>
-    (v || '').length >= 8 ||
+  v => !!v || 'La contraseña es obligatoria.',
+  v => (v || '').length >= 8 ||
     'La contraseña debe tener al menos 8 caracteres.',
-  (v) =>
-    /[A-Za-z]/.test(v || '') ||
-    'La contraseña debe incluir al menos una letra.',
-  (v) =>
-    /\d/.test(v || '') ||
-    'La contraseña debe incluir al menos un número.',
+  v => (v || '').length <= MAX_CONTRASENA ||
+    'La contraseña no debe superar 64 caracteres.',
+  v => /[A-Za-z]/.test(v || '') ||
+    'La contraseña debe incluir una letra.',
+  v => /\d/.test(v || '') ||
+    'La contraseña debe incluir un número.'
 ]
 
 const reglasConfirmacion = [
-  (v) => !!v || 'Debes confirmar tu contraseña.',
-  (v) =>
-    v === contrasena.value ||
-    'Las contraseñas no coinciden.',
+  v => !!v || 'Debes confirmar tu contraseña.',
+  v => v === contrasena.value ||
+    'Las contraseñas no coinciden.'
 ]
 
 // Validación general
 const formularioValido = computed(() => {
   return (
-    nombre.value.trim().length >= 3 &&
-    /^[a-zA-Z0-9_]{4,20}$/.test(usuario.value) &&
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.value) &&
-    contrasena.value.length >= 8 &&
-    /[A-Za-z]/.test(contrasena.value) &&
-    /\d/.test(contrasena.value) &&
-    confirmarContrasena.value === contrasena.value
+    reglasNombre.every(regla => regla(nombre.value) === true) &&
+    reglasUsuario.every(regla => regla(usuario.value) === true) &&
+    reglasCorreo.every(regla => regla(correo.value) === true) &&
+    reglasContrasena.every(regla => regla(contrasena.value) === true) &&
+    reglasConfirmacion.every(
+      regla => regla(confirmarContrasena.value) === true
+    )
   )
 })
+
+// Limitar caracteres al escribir o pegar
+function limitarTexto(valor, maximo) {
+  return String(valor ?? '').slice(0, maximo)
+}
 
 // Seleccionar fotografía
 function seleccionarFoto(event) {
@@ -90,9 +103,15 @@ function seleccionarFoto(event) {
 
   if (!archivo) return
 
-  if (!archivo.type.startsWith('image/')) {
+  const tiposPermitidos = [
+    'image/jpeg',
+    'image/png',
+    'image/webp'
+  ]
+
+  if (!tiposPermitidos.includes(archivo.type)) {
     tipoMensaje.value = 'warning'
-    mensaje.value = 'Selecciona una imagen válida.'
+    mensaje.value = 'Selecciona una imagen JPG, PNG o WEBP.'
     event.target.value = ''
     return
   }
@@ -109,10 +128,11 @@ function seleccionarFoto(event) {
   const lector = new FileReader()
 
   lector.onload = () => {
-    vistaFoto.value = lector.result
+    vistaFoto.value = String(lector.result || '')
   }
 
   lector.onerror = () => {
+    foto.value = null
     tipoMensaje.value = 'error'
     mensaje.value = 'No se pudo leer la fotografía.'
   }
@@ -133,23 +153,21 @@ function recibirFotoEditada(imagen) {
 
 // Validar antes de enviar
 function registrarUsuario() {
-  formularioEnviado.value = true
+  mensaje.value = ''
 
   if (!formularioValido.value) {
     tipoMensaje.value = 'error'
-    mensaje.value =
-      'Revisa los campos señalados antes de continuar.'
+    mensaje.value = 'Revisa los datos antes de continuar.'
     return
   }
 
   tipoMensaje.value = 'info'
   mensaje.value =
-    'Datos validados correctamente. ' +
-    'El registro real estará disponible ' +
-    'cuando conectemos el backend.'
+    'Todos los campos cumplen las validaciones. ' +
+    'El registro real estará disponible cuando ' +
+    'conectemos el backend.'
 
-  // No se almacenan ni se envían contraseñas
-  // o fotografías en esta versión.
+  // Esta versión no envía datos al servidor.
 }
 </script>
 
@@ -161,7 +179,6 @@ function registrarUsuario() {
       elevation="4"
       rounded="lg"
     >
-      <!-- Encabezado -->
       <div class="text-center mb-6">
         <v-icon
           icon="mdi-account-plus"
@@ -178,43 +195,65 @@ function registrarUsuario() {
         </p>
       </div>
 
-      <!-- Formulario -->
       <v-form @submit.prevent="registrarUsuario">
 
+        <!-- Nombre completo -->
         <v-text-field
-          v-model="nombre"
+          :model-value="nombre"
+          @update:model-value="
+            nombre = limitarTexto($event, MAX_NOMBRE)
+          "
           label="Nombre completo"
           prepend-inner-icon="mdi-account"
           variant="outlined"
           :rules="reglasNombre"
-          validate-on="blur"
+          :maxlength="MAX_NOMBRE"
+          :counter="MAX_NOMBRE"
+          validate-on="input"
           required
         />
 
+        <!-- Usuario -->
         <v-text-field
-          v-model="usuario"
+          :model-value="usuario"
+          @update:model-value="
+            usuario = limitarTexto($event, MAX_USUARIO)
+          "
           label="Nombre de usuario"
           prepend-inner-icon="mdi-account-circle"
           variant="outlined"
           :rules="reglasUsuario"
-          validate-on="blur"
-          hint="De 4 a 20 caracteres, sin espacios."
+          :maxlength="MAX_USUARIO"
+          :counter="MAX_USUARIO"
+          validate-on="input"
+          hint="De 4 a 20 caracteres. Letras, números o guion bajo."
+          persistent-hint
           required
         />
 
+        <!-- Correo -->
         <v-text-field
-          v-model="correo"
+          :model-value="correo"
+          @update:model-value="
+            correo = limitarTexto($event, MAX_CORREO)
+          "
           label="Correo electrónico"
           type="email"
           prepend-inner-icon="mdi-email"
           variant="outlined"
           :rules="reglasCorreo"
-          validate-on="blur"
+          :maxlength="MAX_CORREO"
+          :counter="MAX_CORREO"
+          validate-on="input"
           required
         />
 
+        <!-- Contraseña -->
         <v-text-field
-          v-model="contrasena"
+          :model-value="contrasena"
+          @update:model-value="
+            contrasena = limitarTexto($event, MAX_CONTRASENA)
+          "
           label="Contraseña"
           :type="mostrarContrasena ? 'text' : 'password'"
           prepend-inner-icon="mdi-lock"
@@ -226,13 +265,21 @@ function registrarUsuario() {
           "
           variant="outlined"
           :rules="reglasContrasena"
-          validate-on="blur"
-          hint="Mínimo 8 caracteres, con letras y números."
+          :maxlength="MAX_CONTRASENA"
+          :counter="MAX_CONTRASENA"
+          validate-on="input"
+          hint="Entre 8 y 64 caracteres, con letras y números."
+          persistent-hint
           required
         />
 
+        <!-- Confirmación -->
         <v-text-field
-          v-model="confirmarContrasena"
+          :model-value="confirmarContrasena"
+          @update:model-value="
+            confirmarContrasena =
+              limitarTexto($event, MAX_CONTRASENA)
+          "
           label="Confirmar contraseña"
           :type="mostrarConfirmacion ? 'text' : 'password'"
           prepend-inner-icon="mdi-lock-check"
@@ -244,13 +291,14 @@ function registrarUsuario() {
           "
           variant="outlined"
           :rules="reglasConfirmacion"
-          validate-on="blur"
+          :maxlength="MAX_CONTRASENA"
+          validate-on="input"
           required
         />
 
         <v-divider class="my-5" />
 
-        <!-- Fotografía de perfil -->
+        <!-- Fotografía -->
         <h2 class="text-subtitle-1 mb-3">
           Fotografía de perfil
         </h2>
@@ -262,7 +310,7 @@ function registrarUsuario() {
 
         <input
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           @change="seleccionarFoto"
         />
 
@@ -281,7 +329,7 @@ function registrarUsuario() {
 
         <v-divider class="my-5" />
 
-        <!-- Cámara -->
+        <!-- Cámara facial -->
         <CamaraFacial
           @foto-capturada="recibirFoto"
         />
@@ -321,7 +369,6 @@ function registrarUsuario() {
           {{ mensaje }}
         </v-alert>
 
-        <!-- Botón -->
         <v-btn
           type="submit"
           color="secondary"
@@ -332,7 +379,6 @@ function registrarUsuario() {
         >
           Registrarse
         </v-btn>
-
       </v-form>
     </v-card>
   </v-container>

@@ -60,14 +60,7 @@
           </v-row>
 
           <!-- Información adicional -->
-          <v-alert
-            type="info"
-            variant="tonal"
-            class="mt-8"
-          >
-            Proyecto académico desarrollado con
-            Vue 3 y Vuetify.
-          </v-alert>
+          
         </v-card>
       </v-col>
     </v-row>
