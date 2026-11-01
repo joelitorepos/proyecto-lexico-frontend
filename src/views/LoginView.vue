@@ -1,28 +1,22 @@
+
 <script setup>
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import CamaraFacial from '../components/CamaraFacial.vue'
 import { authApi } from '@/services/api'
 
 const router = useRouter()
+const route = useRoute()
 
-// Método de autenticación
 const metodo = ref('contrasena')
-
-// Credenciales
 const correo = ref('')
 const contrasena = ref('')
 const mostrarContrasena = ref(false)
 
-// Fotografía facial (método alternativo, aún sin backend)
 const fotoFacial = ref('')
-
-// QR: subida de imagen (para método visual) y código manual (para backend)
-const archivoQR = ref(null)
 const codigoQr = ref('')
 const resultadoQr = ref(null)
 
-// Estados
 const mensaje = ref('')
 const tipoMensaje = ref('info')
 const procesando = ref(false)
@@ -51,15 +45,18 @@ const puedeIngresar = computed(() => {
       contrasena.value.length > 0
     )
   }
+
   if (metodo.value === 'facial') {
     return (
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.value) &&
       !!fotoFacial.value
     )
   }
+
   if (metodo.value === 'qr') {
     return codigoQr.value.trim().length > 0
   }
+
   return false
 })
 
@@ -74,78 +71,67 @@ function recibirFoto(imagen) {
   mensaje.value = ''
 }
 
-function seleccionarQR(event) {
-  const archivo = event.target.files?.[0]
-
-  archivoQR.value = null
-  mensaje.value = ''
-
-  if (!archivo) return
-
-  if (!['image/png', 'image/jpeg'].includes(archivo.type)) {
-    tipoMensaje.value = 'warning'
-    mensaje.value = 'Selecciona una imagen PNG o JPG.'
-    event.target.value = ''
-    return
-  }
-
-  if (archivo.size > 5 * 1024 * 1024) {
-    tipoMensaje.value = 'warning'
-    mensaje.value = 'El archivo no debe superar 5 MB.'
-    event.target.value = ''
-    return
-  }
-
-  archivoQR.value = archivo
-}
-
 async function iniciarSesion() {
-  if (!puedeIngresar.value) {
-    tipoMensaje.value = 'error'
-    mensaje.value = 'Completa los datos requeridos.'
+  if (!puedeIngresar.value || procesando.value) return
+
+  mensaje.value = ''
+  resultadoQr.value = null
+
+  if (metodo.value === 'facial') {
+    tipoMensaje.value = 'info'
+    mensaje.value =
+      'El inicio de sesión con fotografía estará disponible próximamente.'
     return
   }
 
   procesando.value = true
-  mensaje.value = ''
-  resultadoQr.value = null
 
   try {
     if (metodo.value === 'contrasena') {
-      const data = await authApi.login({
+      const datos = await authApi.login({
         email: correo.value.trim().toLowerCase(),
         password: contrasena.value,
       })
 
-      // Sesión local (sin JWT por ahora)
-      localStorage.setItem('lexiscan_user', JSON.stringify(data))
+      if (!datos.accessToken || datos.tokenType?.toLowerCase() !== 'bearer') {
+        throw new Error('El servidor no devolvió una sesión JWT válida.')
+      }
+
+      sessionStorage.setItem('tokenLexico', datos.accessToken)
+
+      sessionStorage.setItem(
+        'usuarioLexico',
+        JSON.stringify({
+          idUsuario: datos.idUsuario,
+          nickname: datos.nickname,
+        })
+      )
 
       tipoMensaje.value = 'success'
-      mensaje.value = `Bienvenido, ${data.nickname}.`
+      mensaje.value = `Bienvenido, ${datos.nickname}.`
 
-      // Redirige al análisis (ajusta el 'name' si tu router lo llama distinto)
-      router.push({ name: 'analisis' }).catch(() => router.push('/'))
-    } else if (metodo.value === 'facial') {
-      // El backend aún no expone login facial. Se mantiene el mensaje informativo.
-      tipoMensaje.value = 'info'
-      mensaje.value =
-        'El inicio de sesión con fotografía estará disponible próximamente.'
+      const destino =
+        typeof route.query.redirect === 'string' &&
+        route.query.redirect.startsWith('/') &&
+        !route.query.redirect.startsWith('//')
+          ? route.query.redirect
+          : '/analisis'
+
+      await router.push(destino)
     } else if (metodo.value === 'qr') {
-      // El backend recibe el CÓDIGO del QR, no la imagen.
-      const data = await authApi.verificarQr(codigoQr.value.trim())
-      resultadoQr.value = data
+      const datos = await authApi.verificarQr(codigoQr.value.trim())
+      resultadoQr.value = datos
 
-      if (data.valido) {
-        tipoMensaje.value = 'success'
-        mensaje.value = `Credencial válida: ${data.nickname}.`
-      } else {
-        tipoMensaje.value = 'error'
-        mensaje.value = data.mensaje || 'Credencial no válida o revocada.'
-      }
+      tipoMensaje.value = datos.valido ? 'success' : 'error'
+      mensaje.value = datos.valido
+        ? `Credencial válida: ${datos.nickname}.`
+        : datos.mensaje || 'Credencial no válida o revocada.'
     }
   } catch (error) {
+    console.error('Error de autenticación:', error)
     tipoMensaje.value = 'error'
-    mensaje.value = error.message || 'No se pudo completar la operación.'
+    mensaje.value =
+      error.message || 'No se pudo completar la operación.'
   } finally {
     procesando.value = false
   }
@@ -167,9 +153,7 @@ async function iniciarSesion() {
           size="65"
         />
 
-        <h1 class="text-h5 mt-3">
-          Inicio de sesión
-        </h1>
+        <h1 class="text-h5 mt-3">Inicio de sesión</h1>
 
         <p class="text-body-2 mt-2">
           Selecciona un método para acceder al sistema.
@@ -187,7 +171,6 @@ async function iniciarSesion() {
 
       <v-divider class="my-4" />
 
-      <!-- Correo y contraseña -->
       <div v-if="metodo === 'contrasena'">
         <v-text-field
           v-model="correo"
@@ -216,7 +199,6 @@ async function iniciarSesion() {
         />
       </div>
 
-      <!-- Correo y fotografía -->
       <div v-if="metodo === 'facial'">
         <v-text-field
           v-model="correo"
@@ -228,18 +210,11 @@ async function iniciarSesion() {
           validate-on="blur"
         />
 
-        <v-alert
-          type="info"
-          variant="tonal"
-          class="mb-4"
-        >
-          Captura una fotografía de tu rostro
-          para verificar tu identidad.
+        <v-alert type="info" variant="tonal" class="mb-4">
+          Captura una fotografía de tu rostro para verificar tu identidad.
         </v-alert>
 
-        <CamaraFacial
-          @foto-capturada="recibirFoto"
-        />
+        <CamaraFacial @foto-capturada="recibirFoto" />
 
         <v-alert
           v-if="fotoFacial"
@@ -251,7 +226,6 @@ async function iniciarSesion() {
         </v-alert>
       </div>
 
-      <!-- Código QR -->
       <div v-if="metodo === 'qr'">
         <div class="text-center mb-4">
           <v-icon
@@ -261,8 +235,7 @@ async function iniciarSesion() {
           />
 
           <p class="mt-3">
-            Pega el código que contiene tu QR
-            para verificar tu credencial.
+            Pega el código que contiene tu QR para verificar tu credencial.
           </p>
         </div>
 
@@ -271,7 +244,7 @@ async function iniciarSesion() {
           label="Código del QR"
           prepend-inner-icon="mdi-qrcode"
           variant="outlined"
-          hint="El código es el texto que viene dentro del QR."
+          hint="Introduce el texto que contiene el código QR."
           persistent-hint
         />
 
@@ -289,7 +262,6 @@ async function iniciarSesion() {
         </v-alert>
       </div>
 
-      <!-- Mensajes -->
       <v-alert
         v-if="mensaje"
         :type="tipoMensaje"
@@ -298,7 +270,6 @@ async function iniciarSesion() {
         {{ mensaje }}
       </v-alert>
 
-      <!-- Botón -->
       <v-btn
         color="secondary"
         size="large"
@@ -313,9 +284,7 @@ async function iniciarSesion() {
       </v-btn>
 
       <div class="text-center mt-5">
-        <span class="text-body-2">
-          ¿No tienes una cuenta?
-        </span>
+        <span class="text-body-2">¿No tienes una cuenta?</span>
 
         <router-link to="/registro">
           Regístrate aquí

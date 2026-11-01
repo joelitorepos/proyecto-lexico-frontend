@@ -9,11 +9,27 @@ import RegistroView from '../views/RegistroView.vue'
 import LoginView from '../views/LoginView.vue'
 import AnalisisView from '../views/AnalisisView.vue'
 
-// Estado temporal mientras se desarrolla el backend.
-// Nunca debe cambiarse a true sin verificar
-// una sesión real con el servidor.
+// Comprobación temporal para pruebas del frontend.
+// NO sustituye una sesión autenticada por el backend.
 function usuarioAutenticado() {
-  return false
+  try {
+    const datos = sessionStorage.getItem('usuarioLexico')
+
+    if (!datos) {
+      return false
+    }
+
+    const usuario = JSON.parse(datos)
+
+    return (
+      Number.isInteger(usuario.idUsuario) &&
+      usuario.idUsuario > 0 &&
+      typeof usuario.nickname === 'string' &&
+      usuario.nickname.length > 0
+    )
+  } catch {
+    return false
+  }
 }
 
 const router = createRouter({
@@ -46,7 +62,7 @@ const router = createRouter({
   ],
 })
 
-// Protección de navegación
+// Protección temporal de navegación para desarrollo
 router.beforeEach((to) => {
   if (
     to.meta.requiereAutenticacion &&
