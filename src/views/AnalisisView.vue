@@ -65,13 +65,58 @@ function seleccionarArchivo(event) {
 }
 
 async function procesarArchivo() {
-  if (!archivo.value) return
+  if (!archivo.value || procesando.value) return
 
   procesando.value = true
   mensaje.value = ''
   resultados.value = null
 
   try {
+    const token = sessionStorage.getItem('tokenLexico')
+
+    if (!token) {
+      tipoMensaje.value = 'warning'
+      mensaje.value =
+        'Debes iniciar sesión nuevamente para procesar archivos.'
+      return
+    }
+
+    const formulario = new FormData()
+    formulario.append('archivo', archivo.value)
+    formulario.append('idioma', idioma.value)
+
+    const respuesta = await fetch(
+      'http://127.0.0.1:8000/api/analisis',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formulario,
+      }
+    )
+
+    const datos = await respuesta.json()
+
+    if (!respuesta.ok) {
+      if (respuesta.status === 401 || respuesta.status === 403) {
+        sessionStorage.removeItem('tokenLexico')
+        sessionStorage.removeItem('usuarioLexico')
+
+        tipoMensaje.value = 'warning'
+        mensaje.value =
+          'Tu sesión ha vencido o no es válida. Inicia sesión nuevamente.'
+      } else {
+        tipoMensaje.value = 'error'
+        mensaje.value =
+          typeof datos.detail === 'string'
+            ? datos.detail
+            : 'No fue posible registrar el análisis.'
+      }
+      return
+    }
+
+    // Estadísticas detalladas calculadas en el navegador.
     const contenido = await archivo.value.text()
 
     const palabras =
@@ -88,9 +133,7 @@ async function procesarArchivo() {
         (frecuencias[normalizada] || 0) + 1
     }
 
-    const todasLasFrecuencias = Object.entries(
-      frecuencias
-    )
+    const todasLasFrecuencias = Object.entries(frecuencias)
       .sort(
         (a, b) =>
           b[1] - a[1] ||
@@ -102,6 +145,7 @@ async function procesarArchivo() {
       }))
 
     resultados.value = {
+      idAnalisis: datos.idAnalisis,
       totalPalabras: palabras.length,
       palabrasUnicas: todasLasFrecuencias.length,
       totalCaracteres: contenido.length,
@@ -113,11 +157,16 @@ async function procesarArchivo() {
     }
 
     tipoMensaje.value = 'success'
-    mensaje.value = 'Análisis preliminar completado.'
+    mensaje.value =
+      `Análisis completado y registrado en MySQL. ` +
+      `Registro N.º ${datos.idAnalisis}.`
+
   } catch (error) {
     console.error('Error al procesar:', error)
     tipoMensaje.value = 'error'
-    mensaje.value = 'No fue posible leer el archivo.'
+    mensaje.value =
+      'No fue posible completar el análisis. ' +
+      'Verifica que el backend esté encendido.'
   } finally {
     procesando.value = false
   }
@@ -252,6 +301,15 @@ function descargarCSV() {
           Resultados del análisis
         </h2>
 
+        <v-alert
+          v-if="resultados.idAnalisis"
+          type="success"
+          variant="tonal"
+          class="mb-5"
+        >
+          Registro en MySQL N.º {{ resultados.idAnalisis }}
+        </v-alert>
+
         <v-row>
           <v-col cols="12" sm="6" md="3">
             <v-card color="primary" class="pa-4 text-center">
@@ -368,11 +426,12 @@ function descargarCSV() {
           variant="tonal"
           class="mt-6"
         >
-          Este análisis se realiza localmente
-          en el navegador. La clasificación de
-          sustantivos, verbos y pronombres,
-          así como el reporte PDF, dependerán
-          de la integración con el backend.
+          El backend registra el análisis en MySQL.
+          Las estadísticas y gráficas detalladas
+          se calculan en el navegador.
+          La clasificación de sustantivos, verbos
+          y pronombres, así como el reporte PDF,
+          todavía están pendientes.
         </v-alert>
       </div>
     </v-card>

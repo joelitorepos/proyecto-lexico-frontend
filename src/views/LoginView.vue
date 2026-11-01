@@ -1,10 +1,15 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import CamaraFacial from '../components/CamaraFacial.vue'
+
+const router = useRouter()
+const route = useRoute()
 
 // Métodos de autenticación
 const metodo = ref('contrasena')
+const correo = ref('')
 const usuario = ref('')
 const contrasena = ref('')
 const mostrarContrasena = ref(false)
@@ -19,9 +24,16 @@ const tipoMensaje = ref('info')
 const procesando = ref(false)
 
 const metodos = [
-  { title: 'Usuario y contraseña', value: 'contrasena' },
+  { title: 'Correo y contraseña', value: 'contrasena' },
   { title: 'Usuario y fotografía', value: 'facial' },
   { title: 'Código QR', value: 'qr' },
+]
+
+const reglasCorreo = [
+  (v) => !!v?.trim() || 'El correo es obligatorio.',
+  (v) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '') ||
+    'Introduce un correo electrónico válido.',
 ]
 
 const reglasUsuario = [
@@ -38,7 +50,7 @@ const reglasContrasena = [
 const puedeIngresar = computed(() => {
   if (metodo.value === 'contrasena') {
     return (
-      /^[a-zA-Z0-9_]{4,20}$/.test(usuario.value) &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.value) &&
       contrasena.value.length > 0
     )
   }
@@ -92,24 +104,99 @@ function seleccionarQR(event) {
   archivoQR.value = archivo
 }
 
-function iniciarSesion() {
-  if (!puedeIngresar.value) {
-    tipoMensaje.value = 'error'
-    mensaje.value = 'Completa los datos requeridos.'
+async function iniciarSesion() {
+  if (!puedeIngresar.value || procesando.value) {
+    return
+  }
+
+  mensaje.value = ''
+
+  // Los otros métodos todavía necesitan integración.
+  if (metodo.value !== 'contrasena') {
+    tipoMensaje.value = 'info'
+    mensaje.value =
+      'Este método de autenticación estará disponible ' +
+      'cuando se integre su servicio en el backend.'
     return
   }
 
   procesando.value = true
 
-  // Por ahora solo validamos los datos.
-  // No existe una autenticación real todavía.
-  tipoMensaje.value = 'info'
-  mensaje.value =
-    'Datos validados correctamente. ' +
-    'La autenticación estará disponible ' +
-    'cuando conectemos el backend.'
+  try {
+    const respuesta = await fetch(
+      'http://127.0.0.1:8000/api/auth/login',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: correo.value.trim(),
+          password: contrasena.value,
+        }),
+      }
+    )
 
-  procesando.value = false
+    const datos = await respuesta.json()
+
+    if (!respuesta.ok) {
+      tipoMensaje.value = 'error'
+
+      mensaje.value =
+        typeof datos.detail === 'string'
+          ? datos.detail
+          : 'No se pudo iniciar sesión. Verifica tus credenciales.'
+
+      return
+    }
+
+    tipoMensaje.value = 'success'
+    mensaje.value =
+      datos.mensaje || 'Inicio de sesión correcto.'
+
+   
+    // Comprobar que el backend devolvió un token JWT.
+    if (!datos.accessToken || datos.tokenType !== 'bearer') {
+      tipoMensaje.value = 'error'
+      mensaje.value = 'El servidor no devolvió una sesión válida.'
+      return
+    }
+
+    // Guardar los datos de la sesión para utilizarlos
+    // al enviar archivos al backend.
+    sessionStorage.setItem(
+      'usuarioLexico',
+      JSON.stringify({
+        idUsuario: datos.idUsuario,
+        nickname: datos.nickname,
+      })
+    )
+
+    sessionStorage.setItem(
+      'tokenLexico',
+      datos.accessToken
+    )
+  
+
+    // Redirigir después del inicio de sesión.
+    const destino =
+      typeof route.query.redirect === 'string' &&
+      route.query.redirect.startsWith('/') &&
+      !route.query.redirect.startsWith('//')
+        ? route.query.redirect
+        : '/analisis'
+
+    await router.push(destino)
+  } catch (error) {
+    console.error('Error de conexión:', error)
+
+    tipoMensaje.value = 'error'
+    mensaje.value =
+      'No se pudo conectar con el servidor. ' +
+      'Verifica que el backend esté encendido.'
+  } finally {
+    procesando.value = false
+  }
 }
 </script>
 
@@ -148,14 +235,15 @@ function iniciarSesion() {
 
       <v-divider class="my-4" />
 
-      <!-- Usuario y contraseña -->
+      <!-- Correo y contraseña -->
       <div v-if="metodo === 'contrasena'">
         <v-text-field
-          v-model="usuario"
-          label="Nombre de usuario"
-          prepend-inner-icon="mdi-account"
+          v-model="correo"
+          label="Correo electrónico"
+          type="email"
+          prepend-inner-icon="mdi-email"
           variant="outlined"
-          :rules="reglasUsuario"
+          :rules="reglasCorreo"
           validate-on="blur"
         />
 
